@@ -1,5 +1,6 @@
 import bpy
 import textwrap
+import re
 
 __version__ = '0.0.1'
 __author__ = 'Patrick W. Crawford <moo-ack@theduckcow.com>'
@@ -9,7 +10,6 @@ class BlenderMarkdownClass():
 
 	def __init__(self):
 		self.wrap = 70
-		pass
 
 	def dpi_scale(self):
 		return bpy.context.user_preferences.system.pixel_size
@@ -45,24 +45,43 @@ class BlenderMarkdownClass():
 		# apply scale factor for retina screens etc
 		width /= self.dpi_scale()
 
+		# padding to account for some kerning
+		self.wrap = width/7
+
+		# create an isolated subview, and space it closer together
 		c = element.column()
 		c.scale_y = 0.7
-		#self.wrap = int(width/7)-4 # padding to account for some kerning
-		self.wrap = width/7
-		#wrap=75 # could try to inheret from self or window?
+
+		# convert text, ignoring special characters beyond ascii
 		text = str(text.encode('utf-8').decode('ascii', 'ignore'))
 		label_lines = text.split("\n")
-		for ln in label_lines:
+		lines = len(label_lines)
+
+		for i,ln in enumerate(label_lines):
 			#stripped, features = self.strip_formatting(ln)
 			# don't do line wrapping until inside each element,
 			# e.g. if bullet points, must pad more.
 			
 			# need to transform wordwrap in the same parallel fashion,
 			# so that indices still match end/start formatting
+
+			# regex pattern to find images in text
+
+			nx_ln_srp = pv_ln_srp = ""
+			if i<lines-2:
+				nx_ln_srp = label_lines[i+1].rstrip()
+			if i!=0:
+				pv_ln_srp = label_lines[i-1].rstrip()
 			
 			if len(ln)==0:continue
-			if ln.startswith('#'):
+			elif ln.startswith('#') and not ln.startswith('#'*7):
+				# headers defiend up from 1-6 #'s, 7+ will be just displayed as-is
 				self.display_headers(ln,c)
+			elif nx_ln_srp == len(nx_ln_srp) * '=' and nx_ln_srp !='':
+				self.display_headers(ln,c)
+				continue
+			elif ln == len(ln) * '=':
+				continue # skip this, previously already recognized as header
 			elif ln.lstrip().startswith('- '):
 				self.display_bullets(ln,c)
 			else:
@@ -71,6 +90,7 @@ class BlenderMarkdownClass():
 				for s in spl:
 					row = c.row()
 					row.label(s)
+		
 		row = c.row()
 		row.scale_y = 0.5
 		row.label("")
@@ -79,11 +99,27 @@ class BlenderMarkdownClass():
 		c = row
 		ln = text
 
+		# get the <h#> level
+		if text.startswith("######"):
+			header_level = 6
+		elif text.startswith("#####"):
+			header_level = 5
+		elif text.startswith("####"):
+			header_level = 4
+		elif text.startswith("###"):
+			header_level = 3
+		elif text.startswith("##"):
+			header_level = 2
+		elif text.startswith("#"):
+			header_level = 1
+		else:
+			header_level = 1 # e.g. if it's based on === full header
+
 		spl = ln.split("#")
 		ln = ""
 		for y in spl:ln+=y
 		
-		sub_lns = textwrap.fill(ln, self.wrap)
+		sub_lns = textwrap.fill(ln, self.wrap) # ERRORS occur here sometiems..
 		
 		row = c.row()
 		row.scale_y = 0.5
@@ -91,7 +127,12 @@ class BlenderMarkdownClass():
 		
 		row = c.row()
 		row.scale_y = 0.5
-		row.label("."*200)
+		if header_level==1:
+			row.label("."*1000)
+		elif header_level <4:
+			row.label("."*150)
+		else:
+			row.label("."*150)
 		
 		sub_lns = sub_lns.split("\n")
 		row = c.row()
@@ -103,12 +144,22 @@ class BlenderMarkdownClass():
 		
 		row = c.row()
 		row.scale_y = 0.2
-		row.label("."*200)
+		if header_level==1:
+			row.label("."*1000)
+		elif header_level<4:
+			row.label("."*150)
 		
 		row = c.row()
 		row.scale_y = 0.5
 		row.label("")
 	
+	def display_links_as_icons(self, text, row):
+
+		"!\[[^\]]+\]\([^)]+\)"
+
+		# the regex fpr image link is:
+
+
 	def display_bullets(self,text,row):
 		# some kind of bullet
 		ln = text
